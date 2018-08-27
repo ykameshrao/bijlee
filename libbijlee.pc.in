@@ -1,0 +1,14 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libbijlee
+URL: http://ykameshrao.com/
+Description: An elegant C++11 TCP library.
+Version: @version@
+Requires:
+Libs: -L'${libdir}/' -lbijlee -lpthread
+Libs.private:
+Cflags: -I'${includedir}/'
+

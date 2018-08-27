@@ -1,0 +1,12 @@
+#ifndef BIJLEE_VERSION_H
+#define BIJLEE_VERSION_H
+
+namespace Bijlee {
+namespace Version {
+
+    static constexpr int Major = @VERSION_MAJOR@;
+    static constexpr int Minor = @VERSION_MINOR@;
+} // namespace Version
+} // namespace BIJLEE
+
+#endif //BIJLEE_VERSION_H
