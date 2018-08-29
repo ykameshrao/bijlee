@@ -13,9 +13,9 @@
 #include "bijlee/os.h"
 
 using namespace std;
-using namespace Bijlee;
+using namespace bjl;
 
-int Linux::processor_core_count() {
+int linux::processor_core_count() {
     std::ifstream cpuinfo("/proc/cpuinfo");
     if (cpuinfo) {
         return std::count(std::istream_iterator<std::string>(cpuinfo),
@@ -26,7 +26,7 @@ int Linux::processor_core_count() {
     return sysconf(_SC_NPROCESSORS_ONLN);
 }
 
-bool Linux::make_non_blocking(int fd) {
+bool linux::make_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) return false;
 
