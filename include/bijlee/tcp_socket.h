@@ -5,10 +5,14 @@
 #ifndef BIJLEE_SOCKET_H
 #define BIJLEE_SOCKET_H
 
+#include "net.h"
+
 namespace bjl {
     class tcp_socket {
     public:
-        void bind_and_listen();
+        tcp_socket(address addr);
+
+        void bind();
 
         void connect();
 
@@ -16,7 +20,7 @@ namespace bjl {
 
         void shutdown();
     private:
-
+        address address_;
     };
 }
 

@@ -13,6 +13,15 @@ namespace bjl {
     public:
         address(std::string& host_ip, uint16_t port, proto& protocl);
         address(std::string& host_dns);
+
+        address(const address& other) = default;
+        address(address&& other) = default;
+
+        address &operator=(const address& other) = default;
+        address &operator=(address&& other) = default;
+
+        const char* host_ip() const;
+        const char* port() const;
     private:
         std::string _host_ip;
         std::string _host_dns;
