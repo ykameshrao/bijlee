@@ -41,9 +41,15 @@ address::address(std::string& host_dns) {
 }
 
 const char *address::host_ip() const {
-    return nullptr;
+    return _host_ip.c_str();
 }
 
 const char *address::port() const {
-    return nullptr;
+    static constexpr size_t MaxPortLength = sizeof("65535");
+
+    char port[MaxPortLength];
+    std::fill(port, port + MaxPortLength, 0);
+    std::snprintf(port, MaxPortLength, "%d", _port);
+
+    return port;
 }

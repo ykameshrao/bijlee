@@ -10,12 +10,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "bijlee/os.h"
+#include "bijlee/util.h"
 
 using namespace std;
 using namespace bjl;
 
-int linux::processor_core_count() {
+int util::processor_core_count() {
     std::ifstream cpuinfo("/proc/cpuinfo");
     if (cpuinfo) {
         return std::count(std::istream_iterator<std::string>(cpuinfo),
@@ -26,7 +26,7 @@ int linux::processor_core_count() {
     return sysconf(_SC_NPROCESSORS_ONLN);
 }
 
-bool linux::make_non_blocking(int fd) {
+bool util::make_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) return false;
 
