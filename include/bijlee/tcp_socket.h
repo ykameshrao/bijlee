@@ -19,6 +19,7 @@ namespace bjl {
         void serve();
 
         void shutdown();
+
     private:
         address address_;
     };

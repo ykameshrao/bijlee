@@ -8,9 +8,15 @@
 namespace bjl {
     class  util {
     public:
-        int processor_core_count();
+        static int processor_core_count();
 
-        bool make_non_blocking(int fd);
+        static bool make_non_blocking(int fd);
+
+        template<typename SysCall>
+        static void trySysCall(SysCall sc);
+
+        template<typename SysCall, typename RetVal>
+        static RetVal trySysCall(SysCall sc);
     };
 }
 

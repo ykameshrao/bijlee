@@ -3,12 +3,14 @@
 // Copyright (c) 2018, Kaleidosoft Labs. All rights reserved.
 //
 
-#include <bijlee/tcp_socket.h>
 #include <netdb.h>
+#include <unistd.h>
 
+#include <bijlee/tcp_socket.h>
+#include <bijlee/util.h>
 #include "bijlee/tcp_socket.h"
 
-bjl::tcp_socket::tcp_socket(bjl::address addr) : address_ { addr } {
+bjl::tcp_socket::tcp_socket(bjl::address addr) : address_{addr} {
     // validate the address
 
 }
@@ -20,8 +22,27 @@ void bjl::tcp_socket::bind() {
     hints.ai_flags = AI_PASSIVE;
     hints.ai_protocol = 0;
 
-    static constexpr size_t MaxPortLenth = sizeof("65535");
+    struct addrinfo *addrs;
+    util::trySysCall([&]() {
+        ::getaddrinfo(address_.host_ip(), address_.port(), &hints, &addrs);
+    });
 
+    int sockFd = -1;
+
+    for (struct addrinfo *addr = addrs; addr; addr = addr->ai_next) {
+        sockFd = ::socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+
+        if (sockFd < 0)
+            continue;
+
+        if (::bind(sockFd, addr->ai_addr, addr->ai_addrlen) < 0) {
+            close(sockFd);
+            continue;
+        }
+
+        TRY(::listen(sockFd, backlog_));
+        break;
+    }
 }
 
 void bjl::tcp_socket::connect() {

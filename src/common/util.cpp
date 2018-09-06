@@ -9,6 +9,10 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+#include <bijlee/util.h>
+#include <sstream>
+#include <cstring>
+
 
 #include "bijlee/util.h"
 
@@ -35,4 +39,38 @@ bool util::make_non_blocking(int fd) {
     if (ret == -1) return false;
 
     return true;
+}
+
+template<typename SysCall>
+void util::trySysCall(SysCall sc) {
+    auto ret = sc();
+    if (ret < 0) {
+        std::ostringstream oss;
+        oss << "syscall failed: ";
+        if (errno == 0) {
+            oss << gai_strerror(ret);
+        } else {
+            oss << strerror(errno);
+        }
+
+        throw std::runtime_error(oss.str());
+    }
+}
+
+template<typename SysCall, typename RetVal>
+RetVal util::trySysCall(SysCall sc) {
+    RetVal ret = sc();
+    if (ret < 0) {
+        std::ostringstream oss;
+        oss << "syscall failed: ";
+        if (errno == 0) {
+            oss << gai_strerror(ret);
+        } else {
+            oss << strerror(errno);
+        }
+
+        throw std::runtime_error(oss.str());
+    }
+
+    return ret;
 }
