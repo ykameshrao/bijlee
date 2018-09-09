@@ -12,6 +12,7 @@
 #include <bijlee/util.h>
 #include <sstream>
 #include <cstring>
+#include <netdb.h>
 
 
 #include "bijlee/util.h"
@@ -41,25 +42,7 @@ bool util::make_non_blocking(int fd) {
     return true;
 }
 
-template<typename SysCall>
-void util::trySysCall(SysCall sc) {
-    auto ret = sc();
-    if (ret < 0) {
-        std::ostringstream oss;
-        oss << "syscall failed: ";
-        if (errno == 0) {
-            oss << gai_strerror(ret);
-        } else {
-            oss << strerror(errno);
-        }
-
-        throw std::runtime_error(oss.str());
-    }
-}
-
-template<typename SysCall, typename RetVal>
-RetVal util::trySysCall(SysCall sc) {
-    RetVal ret = sc();
+int util::try_sys_call(int ret) {
     if (ret < 0) {
         std::ostringstream oss;
         oss << "syscall failed: ";

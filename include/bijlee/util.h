@@ -12,11 +12,7 @@ namespace bjl {
 
         static bool make_non_blocking(int fd);
 
-        template<typename SysCall>
-        static void trySysCall(SysCall sc);
-
-        template<typename SysCall, typename RetVal>
-        static RetVal trySysCall(SysCall sc);
+        static int try_sys_call(int ret);
     };
 }
 
