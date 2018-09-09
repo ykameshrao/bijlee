@@ -64,6 +64,7 @@ void bjl::tcp_socket::bind() {
     }
 
     util::make_non_blocking(sockFd);
+    epoller_.add_fd(sockFd, EPOLLIN);
     socket_fd_ = sockFd;
     volatile_listen_fd = sockFd;
 }
