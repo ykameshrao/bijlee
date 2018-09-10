@@ -6,6 +6,7 @@
 #define BIJLEE_IO_EVENT_LOOP_H
 
 #include <unordered_map>
+#include <sys/socket.h>
 #include "epoller.h"
 #include "net.h"
 
@@ -14,14 +15,14 @@ namespace bjl {
     public:
         io_event_loop(int workers);
 
-        void add_connection(address&& addr, int&& connection_fd);
+        void add_connection(sockaddr&& addr, int connection_fd);
 
         void run();
 
     private:
         int workers_;
-        epoller io_epoller_;
-        std::unordered_map<int, address> connections;
+        //epoller io_epoller_;
+        std::unordered_map<int, sockaddr> connections;
     };
 }
 

@@ -8,7 +8,7 @@
 bjl::io_event_loop::io_event_loop(int workers) : workers_ { workers } {
 }
 
-void bjl::io_event_loop::add_connection(address&& addr, int&& connection_fd) {
+void bjl::io_event_loop::add_connection(sockaddr&& addr, int connection_fd) {
     connections.insert(std::make_pair(connection_fd, addr));
 }
 

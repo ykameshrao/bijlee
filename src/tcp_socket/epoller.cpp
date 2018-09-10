@@ -6,7 +6,9 @@
 #include <bijlee/util.h>
 #include <sys/epoll.h>
 
-bjl::epoller::epoller() : epoller(DefaultMaxPollFileDescriptors) {}
+bjl::epoller::epoller() {
+    epoll_fd = util::try_sys_call(epoll_create1(0));
+}
 
 bjl::epoller::epoller(int max) {
     epoll_fd = util::try_sys_call(epoll_create(max));

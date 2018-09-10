@@ -11,20 +11,20 @@
 
 using namespace bjl;
 
-address::address(std::string host_ip, uint16_t port, bjl::proto protocl) :
-    _host_ip { std::move(host_ip) }, _port { port }, _protocol { protocl } {
-    if(_port < 1024)
+address::address(std::string host_ip, std::string port, bjl::proto protocl) :
+    host_ip_ { std::move(host_ip) }, port_ { std::move(port) }, protocol_ { protocl } {
+    if(std::stoi(port_) < 1024)
         throw std::runtime_error("used port");
 
     // validate host name format as per protocol
     struct sockaddr_in sa;
     int result;
-    switch(_protocol) {
+    switch(protocol_) {
         case proto::ipv4:
-            result = inet_pton(AF_INET, _host_ip.c_str(), &(sa.sin_addr));
+            result = inet_pton(AF_INET, host_ip_.c_str(), &(sa.sin_addr));
             break;
         case proto::ipv6:
-            result = inet_pton(AF_INET6, _host_ip.c_str(), &(sa.sin_addr));
+            result = inet_pton(AF_INET6, host_ip_.c_str(), &(sa.sin_addr));
             break;
     }
 
@@ -41,15 +41,9 @@ address::address(std::string host_dns) {
 }
 
 const char *address::host_ip() const {
-    return _host_ip.c_str();
+    return host_ip_.c_str();
 }
 
 const char *address::port() const {
-    static constexpr size_t MaxPortLength = sizeof("65535");
-
-    char port[MaxPortLength];
-    std::fill(port, port + MaxPortLength, 0);
-    std::snprintf(port, MaxPortLength, "%d", _port);
-
-    return port;
+    return port_.c_str();
 }

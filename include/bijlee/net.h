@@ -11,7 +11,7 @@ namespace bjl {
     enum class proto { ipv4, ipv6 };
     class address {
     public:
-        address(std::string host_ip, uint16_t port, proto protocl);
+        address(std::string host_ip, std::string port, proto protocl);
         address(std::string host_dns);
 
         address(const address& other) = default;
@@ -23,10 +23,10 @@ namespace bjl {
         const char* host_ip() const;
         const char* port() const;
     private:
-        std::string _host_ip;
-        std::string _host_dns;
-        uint16_t _port;
-        proto _protocol;
+        std::string host_ip_;
+        std::string host_dns_;
+        std::string port_;
+        proto protocol_;
     };
 }
 

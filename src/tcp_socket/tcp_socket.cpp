@@ -11,6 +11,7 @@
 #include <csignal>
 #include <sys/epoll.h>
 #include <vector>
+#include <cstring>
 #include <arpa/inet.h>
 #include "bijlee/tcp_socket.h"
 
@@ -39,7 +40,8 @@ bjl::tcp_socket::tcp_socket(bjl::address addr, int conn_queue_length):
 
 void bjl::tcp_socket::bind() {
     struct addrinfo hints;
-    hints.ai_family = AF_INET;
+    std::memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     hints.ai_protocol = 0;
@@ -48,7 +50,6 @@ void bjl::tcp_socket::bind() {
     util::try_sys_call(::getaddrinfo(address_.host_ip(), address_.port(), &hints, &addrs));
 
     int sockFd = -1;
-
     for (struct addrinfo *addr = addrs; addr; addr = addr->ai_next) {
         sockFd = ::socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 
@@ -65,14 +66,13 @@ void bjl::tcp_socket::bind() {
     }
 
     util::make_non_blocking(sockFd);
-    epoller_.add_fd(sockFd, EPOLLIN | EPOLLPRI | EPOLLERR | EPOLLHUP);
+    epoller_.add_fd(sockFd, EPOLLIN);
     socket_fd_ = sockFd;
     volatile_listen_fd = sockFd;
 }
 
 void bjl::tcp_socket::run() {
     for (;;) {
-        std::cout << "polling...";
         std::vector<epoll_event> events;
 
         int ready_fds = epoller_.poll(events, 128, std::chrono::milliseconds(-1));
@@ -92,15 +92,23 @@ void bjl::tcp_socket::run() {
 }
 
 void bjl::tcp_socket::handle_new_connection() {
-    struct sockaddr_in peer_addr;
-    socklen_t peer_addr_len = sizeof(peer_addr);
-    address peer_address { std::string { inet_ntoa(peer_addr.sin_addr) }, ntohs(peer_addr.sin_port) , proto::ipv4 };
+    struct sockaddr in_addr;
+    socklen_t in_len = sizeof(in_addr);
 
-    int client_fd = util::try_sys_call(::accept(socket_fd_, (struct sockaddr *)&peer_addr, &peer_addr_len));
+    int client_fd = util::try_sys_call(::accept(socket_fd_, &in_addr, &in_len));
     util::make_non_blocking(client_fd);
 
-    std::cout << "received connection from : "  << peer_address.host_ip();
-    io_evt_loop_.add_connection(std::move(peer_address), std::move(client_fd));
+    std::string hbuf(NI_MAXHOST, '\0');
+    std::string sbuf(NI_MAXSERV, '\0');
+    if (::getnameinfo(&in_addr, in_len,
+                    const_cast<char*>(hbuf.data()), hbuf.size(),
+                    const_cast<char*>(sbuf.data()), sbuf.size(),
+                    NI_NUMERICHOST | NI_NUMERICSERV) == 0)
+    {
+        std::cout << "[I] Accepted connection on descriptor " << client_fd << "(host=" << hbuf << ", port=" << sbuf << ")" << "\n";
+    }
+
+    io_evt_loop_.add_connection(std::move(in_addr), client_fd);
 }
 
 void bjl::tcp_socket::connect() {
