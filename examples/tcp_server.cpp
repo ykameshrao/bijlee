@@ -2,4 +2,16 @@
 // Created by Kamesh Rao Yeduvakula on 27/8/18.
 // Copyright (c) 2018, Kaleidosoft Labs. All rights reserved.
 //
-#include "tcp_server_example.h"
+#include <bijlee/net.h>
+#include <bijlee/tcp_socket.h>
+
+using namespace bjl;
+
+int main() {
+    address server_address { "0.0.0.0", 9000, proto::ipv4 };
+    tcp_socket server { server_address };
+
+    server.start();
+
+    return 0;
+}

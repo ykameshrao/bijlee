@@ -28,9 +28,7 @@ add_subdirectory (src)
 
 include_directories (src)
 
-if (BIJLEE_BUILD_EXAMPLES)
-    add_subdirectory (examples)
-endif()
+add_subdirectory (examples)
 
 # Set version...
 

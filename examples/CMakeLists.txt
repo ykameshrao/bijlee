@@ -7,3 +7,4 @@ function(bijlee_example example_name)
 endfunction()
 
 bijlee_example(tcp_server)
+bijlee_example(dtoma_epoll_example)

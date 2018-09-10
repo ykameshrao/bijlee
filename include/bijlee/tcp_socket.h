@@ -8,6 +8,7 @@
 #include <thread>
 #include "net.h"
 #include "epoller.h"
+#include "io_event_loop.h"
 
 namespace bjl {
     class tcp_socket {
@@ -17,8 +18,6 @@ namespace bjl {
         tcp_socket(address addr, int conn_queue_length);
 
         void start();
-
-        void startThreaded();
 
         void shutdown();
 
@@ -32,11 +31,15 @@ namespace bjl {
         int conn_queue_length_;
         std::unique_ptr<std::thread> acceptor_thread_;
         epoller epoller_;
+        io_event_loop io_evt_loop_;
+
         constexpr static int DefaultConnQueueLength = 128;
 
         void bind();
 
         void run();
+
+        void start_threaded();
     };
 }
 

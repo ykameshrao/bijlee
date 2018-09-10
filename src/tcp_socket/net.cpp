@@ -11,7 +11,7 @@
 
 using namespace bjl;
 
-address::address(std::string& host_ip, uint16_t port, bjl::proto& protocl) :
+address::address(std::string host_ip, uint16_t port, bjl::proto protocl) :
     _host_ip { std::move(host_ip) }, _port { port }, _protocol { protocl } {
     if(_port < 1024)
         throw std::runtime_error("used port");
@@ -21,10 +21,10 @@ address::address(std::string& host_ip, uint16_t port, bjl::proto& protocl) :
     int result;
     switch(_protocol) {
         case proto::ipv4:
-            result = inet_pton(AF_INET, host_ip.c_str(), &(sa.sin_addr));
+            result = inet_pton(AF_INET, _host_ip.c_str(), &(sa.sin_addr));
             break;
         case proto::ipv6:
-            result = inet_pton(AF_INET6, host_ip.c_str(), &(sa.sin_addr));
+            result = inet_pton(AF_INET6, _host_ip.c_str(), &(sa.sin_addr));
             break;
     }
 
@@ -36,7 +36,7 @@ address::address(std::string& host_ip, uint16_t port, bjl::proto& protocl) :
 
 }
 
-address::address(std::string& host_dns) {
+address::address(std::string host_dns) {
     throw std::runtime_error("not yet implemented");
 }
 
