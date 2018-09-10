@@ -35,7 +35,16 @@ bjl::tcp_socket::tcp_socket(bjl::address addr) : tcp_socket(addr, DefaultConnQue
 
 bjl::tcp_socket::tcp_socket(bjl::address addr, int conn_queue_length):
                                     address_{addr}, conn_queue_length_{conn_queue_length}, io_evt_loop_{util::processor_core_count()} {
-    // validate the address
+}
+
+bjl::tcp_socket::~tcp_socket() {
+    if (acceptor_thread_) acceptor_thread_->join();
+    if(io_thread_) io_thread_->join();
+
+    if(socket_fd_) {
+        epoller_.remove_fd(socket_fd_);
+        ::close(socket_fd_);
+    }
 }
 
 void bjl::tcp_socket::bind() {
@@ -79,10 +88,14 @@ void bjl::tcp_socket::run() {
         if (ready_fds == -1) {
             if (errno == EINTR && volatile_listen_fd == -1) return;
             throw std::runtime_error("polling interrupted");
-        }
-        else if (ready_fds > 0) {
+        } else if (ready_fds > 0) {
             for (const auto& event: events) {
-                if (event.events & EPOLLIN) {
+                if (event.events & EPOLLERR ||
+                    event.events & EPOLLHUP ||
+                    !(event.events & EPOLLIN)) {
+                    std::cerr << "[E] epoll event error\n";
+                    ::close(event.data.fd);
+                } else if (event.events & EPOLLIN) {
                     if (event.data.fd == socket_fd_)
                         handle_new_connection();
                 }
@@ -98,14 +111,13 @@ void bjl::tcp_socket::handle_new_connection() {
     int client_fd = util::try_sys_call(::accept(socket_fd_, &in_addr, &in_len));
     util::make_non_blocking(client_fd);
 
-    std::string hbuf(NI_MAXHOST, '\0');
-    std::string sbuf(NI_MAXSERV, '\0');
+    char host[NI_MAXHOST];
+    char service[NI_MAXSERV];
     if (::getnameinfo(&in_addr, in_len,
-                    const_cast<char*>(hbuf.data()), hbuf.size(),
-                    const_cast<char*>(sbuf.data()), sbuf.size(),
-                    NI_NUMERICHOST | NI_NUMERICSERV) == 0)
-    {
-        std::cout << "[I] Accepted connection on descriptor " << client_fd << "(host=" << hbuf << ", port=" << sbuf << ")" << "\n";
+                    host, NI_MAXHOST,
+                    service, NI_MAXSERV,
+                    NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
+        std::cout << "[I] Accepted connection on descriptor " << client_fd << " (host=" << host << ", port=" << service << ")" << "\n";
     }
 
     io_evt_loop_.add_connection(std::move(in_addr), client_fd);
@@ -116,19 +128,24 @@ void bjl::tcp_socket::connect() {
 }
 
 void bjl::tcp_socket::start() {
-   // start_threaded();
-   bind();
-   run();
+   start_threaded();
 }
 
 void bjl::tcp_socket::start_threaded() {
-    acceptor_thread_.reset(new std::thread([=]() {
+    acceptor_thread_.reset(new std::thread([this]() {
         this->bind();
         this->run();
     }));
-    //acceptor_thread_.get()->join();
+
+    io_thread_.reset(new std::thread([this]() {
+        this->run_io_epoller();
+    }));
 }
 
 void bjl::tcp_socket::shutdown() {
 
+}
+
+void bjl::tcp_socket::run_io_epoller() {
+    io_evt_loop_.run();
 }
