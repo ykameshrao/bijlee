@@ -10,11 +10,10 @@
 
 bjl::io_event_loop::io_event_loop(int workers) : workers_ { workers } {
     workers_ = std::max(workers, 2);
-    current_output_epoller_ = 0;
+    current_epoller_ = 0;
 }
 
 bjl::io_event_loop::~io_event_loop() {
-    input_thread_->join();
     for (auto& t : worker_threads_) {
         t->join();
     }
@@ -22,16 +21,19 @@ bjl::io_event_loop::~io_event_loop() {
 
 void bjl::io_event_loop::add_connection(sockaddr&& addr, int connection_fd) {
     connections_.insert(std::make_pair(connection_fd, addr));
-    epollers_[input_thread_id]->add_fd(connection_fd, EPOLLIN | EPOLLHUP | EPOLLOUT);
+    epollers_[worker_threads_idx_[current_epoller_]]->add_fd(connection_fd, EPOLLIN | EPOLLHUP | EPOLLOUT);
+    current_epoller_++;
+    if ( current_epoller_ >= workers_ )
+        current_epoller_ = 0;
 }
 
 void bjl::io_event_loop::run() {
-    std::cout << "[I] Socket connection io event loop " << std::this_thread::get_id();
+    std::cout << "[I] Starting socket connection io event loop " << std::this_thread::get_id() << std::endl;
 
-    for ( int i = 0; i < workers_ - 1 ; i++ ) {
+    for ( int i = 0; i < workers_ ; i++ ) {
         worker_threads_.push_back(std::make_unique<std::thread>([this, i]() {
-            std::cout << "[I] Output event loop " << std::this_thread::get_id();
-            output_threads_.insert(std::make_pair(i, std::this_thread::get_id()));
+            std::cout << "[I] Input/Output event loop " << std::this_thread::get_id() << std::endl;
+            worker_threads_idx_.insert(std::make_pair(i, std::this_thread::get_id()));
             epollers_.insert(std::make_pair(std::this_thread::get_id(), std::make_unique<epoller>()));
 
             for (;;) {
@@ -41,7 +43,12 @@ void bjl::io_event_loop::run() {
                 if (ready_fds > 0) {
                     for (const auto &event: events) {
                         close_on_error(event);
-                        if (event.events & EPOLLOUT) {
+
+                        if (event.events & EPOLLIN) {
+                            if(!read_data(event.data.fd)) {
+                                epollers_[std::this_thread::get_id()]->rearm_fd(event.data.fd, EPOLLOUT | EPOLLET);
+                            }
+                        } else if (event.events & EPOLLOUT) {
                             send_data(event.data.fd);
                         }
                     }
@@ -49,35 +56,6 @@ void bjl::io_event_loop::run() {
             }
         }));
     }
-
-    input_thread_.reset(new std::thread([this]() {
-        std::cout << "[I] Input event loop " << std::this_thread::get_id();
-        input_thread_id = std::this_thread::get_id();
-        epollers_.insert(std::make_pair(std::this_thread::get_id(), std::make_unique<epoller>()));
-
-        for (;;) {
-            std::vector<epoll_event> events;
-            int ready_fds = epollers_[input_thread_id]->poll(events, 1024, std::chrono::milliseconds(-1));
-
-            if (ready_fds > 0) {
-                for (const auto& event: events) {
-                    close_on_error(event);
-
-                    if (event.events & EPOLLIN) {
-                        if(!read_data(event.data.fd)) {
-                            epollers_[output_threads_[current_output_epoller_]]->add_fd(event.data.fd, EPOLLOUT | EPOLLET);
-                            epollers_[input_thread_id]->remove_fd(event.data.fd);
-                            current_output_epoller_++;
-                            if ( current_output_epoller_ > workers_ - 1 )
-                                current_output_epoller_ = 0;
-                        }
-                    }
-                }
-            }
-        }
-    }));
-
-
 }
 
 void bjl::io_event_loop::close_on_error(epoll_event e) {
@@ -85,6 +63,7 @@ void bjl::io_event_loop::close_on_error(epoll_event e) {
         std::cerr << "[E] " << std::this_thread::get_id() << " epoll event error\n";
         epollers_[std::this_thread::get_id()]->remove_fd(e.data.fd);
         ::close(e.data.fd);
+        connections_.erase(e.data.fd);
     }
 }
 
@@ -99,6 +78,7 @@ bool bjl::io_event_loop::read_data(int fd) {
         std::cout << "[I] " << std::this_thread::get_id() << " Close " << fd << "\n";
         epollers_[std::this_thread::get_id()]->remove_fd(fd);
         ::close(fd);
+        connections_.erase(fd);
         return false;
     }
 
@@ -125,6 +105,7 @@ bool bjl::io_event_loop::send_data(int fd) {
         std::cout << "[I] " << std::this_thread::get_id() << " Done writing...closing connection!" << "\n";
         epollers_[std::this_thread::get_id()]->remove_fd(fd);
         ::close(fd);
+        connections_.erase(fd);
     }
 }
 

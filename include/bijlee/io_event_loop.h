@@ -29,13 +29,10 @@ namespace bjl {
 
     private:
         int workers_;
-        int current_output_epoller_;
-        std::thread::id input_thread_id;
-        //std::vector<std::unique_ptr<epoller>> output_epollers_;
-        std::unique_ptr<std::thread> input_thread_;
+        int current_epoller_;
         std::vector<std::unique_ptr<std::thread>> worker_threads_;
         std::unordered_map<int, sockaddr> connections_;
-        std::unordered_map<int, std::thread::id> output_threads_;
+        std::unordered_map<int, std::thread::id> worker_threads_idx_;
         std::unordered_map<std::thread::id, std::unique_ptr<epoller>> epollers_;
     };
 }
