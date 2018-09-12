@@ -93,7 +93,7 @@ void bjl::tcp_socket::run() {
                 if (event.events & EPOLLERR ||
                     event.events & EPOLLHUP ||
                     !(event.events & EPOLLIN)) {
-                    std::cerr << "[E] " << std::this_thread::get_id() << " epoll event error\n";
+                    std::cerr << "[E] " << std::this_thread::get_id() << " epoll event error" << std::endl;
                     ::close(event.data.fd);
                 } else if (event.events & EPOLLIN) {
                     if (event.data.fd == socket_fd_)
@@ -117,7 +117,7 @@ void bjl::tcp_socket::handle_new_connection() {
                     host, NI_MAXHOST,
                     service, NI_MAXSERV,
                     NI_NUMERICHOST | NI_NUMERICSERV) == 0) {
-        std::cout << "[I] " << std::this_thread::get_id() << " Accepted connection on descriptor " << client_fd << " (host=" << host << ", port=" << service << ")" << "\n";
+        std::cout << "[I] " << std::this_thread::get_id() << " Accepted connection on descriptor " << client_fd << " (host=" << host << ", port=" << service << ")"  << std::endl;
     }
 
     io_evt_loop_.add_connection(std::move(in_addr), client_fd);
@@ -128,12 +128,13 @@ void bjl::tcp_socket::connect() {
 }
 
 void bjl::tcp_socket::start() {
-   start_threaded();
+    std::cout << "[I] Starting thread: " << std::this_thread::get_id() << std::endl;
+    start_threaded();
 }
 
 void bjl::tcp_socket::start_threaded() {
     acceptor_thread_.reset(new std::thread([this]() {
-        std::cout << "[I] Socket connection acceptor thread " << std::this_thread::get_id();
+        std::cout << "[I] Socket connection acceptor thread: " << std::this_thread::get_id() << std::endl;
         this->bind();
         this->run();
     }));

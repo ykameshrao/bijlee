@@ -60,7 +60,7 @@ void bjl::io_event_loop::run() {
 
 void bjl::io_event_loop::close_on_error(epoll_event e) {
     if (e.events & EPOLLERR || e.events & EPOLLHUP || ( !(e.events & EPOLLIN) && !(e.events & EPOLLOUT) ) ) {
-        std::cerr << "[E] " << std::this_thread::get_id() << " epoll event error\n";
+        std::cerr << "[E] " << std::this_thread::get_id() << " epoll event error" << std::endl;
         epollers_[std::this_thread::get_id()]->remove_fd(e.data.fd);
         ::close(e.data.fd);
         //connections_.erase(e.data.fd);
@@ -75,7 +75,7 @@ bool bjl::io_event_loop::read_data(int fd) {
             return false;
         }
     } else if (count == 0) { // EOF - remote closed connection
-        std::cout << "[I] " << std::this_thread::get_id() << " Close " << fd << "\n";
+        std::cout << "[I] " << std::this_thread::get_id() << " Close " << fd << std::endl;
         epollers_[std::this_thread::get_id()]->remove_fd(fd);
         ::close(fd);
         //connections_.erase(fd);
@@ -557,9 +557,9 @@ bool bjl::io_event_loop::send_data(int fd) {
 
     auto count = ::write(fd, wsss.str().c_str(), wsss.str().size());
     if (count == -1) {
-        std::cout << "[E] " << std::this_thread::get_id() << " Write failed" << "\n";
+        std::cout << "[E] " << std::this_thread::get_id() << " Write failed" << std::endl;
     } else if (count == wsss.str().size()) {
-        std::cout << "[I] " << std::this_thread::get_id() << " Done writing...closing connection!" << "\n";
+        std::cout << "[I] " << std::this_thread::get_id() << " Done writing...closing connection!" << std::endl;
         epollers_[std::this_thread::get_id()]->remove_fd(fd);
         ::close(fd);
         //connections_.erase(fd);
