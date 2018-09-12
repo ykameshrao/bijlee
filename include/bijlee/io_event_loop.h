@@ -33,8 +33,9 @@ namespace bjl {
         std::thread::id input_thread_id;
         //std::vector<std::unique_ptr<epoller>> output_epollers_;
         std::unique_ptr<std::thread> input_thread_;
-        std::vector<std::thread> worker_threads_;
+        std::vector<std::unique_ptr<std::thread>> worker_threads_;
         std::unordered_map<int, sockaddr> connections_;
+        std::unordered_map<int, std::thread::id> output_threads_;
         std::unordered_map<std::thread::id, std::unique_ptr<epoller>> epollers_;
     };
 }

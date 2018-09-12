@@ -10,15 +10,13 @@
 
 bjl::io_event_loop::io_event_loop(int workers) : workers_ { workers } {
     workers_ = std::max(workers, 2);
-    for (int i=0; i < workers_ - 1; i++) {
-        output_epollers_[i] = std::make_unique<epoller>();
-    }
+    current_output_epoller_ = 0;
 }
 
 bjl::io_event_loop::~io_event_loop() {
     input_thread_->join();
     for (auto& t : worker_threads_) {
-        t.join();
+        t->join();
     }
 }
 
@@ -29,6 +27,28 @@ void bjl::io_event_loop::add_connection(sockaddr&& addr, int connection_fd) {
 
 void bjl::io_event_loop::run() {
     std::cout << "[I] Socket connection io event loop " << std::this_thread::get_id();
+
+    for ( int i = 0; i < workers_ - 1 ; i++ ) {
+        worker_threads_.push_back(std::make_unique<std::thread>([this, i]() {
+            std::cout << "[I] Output event loop " << std::this_thread::get_id();
+            output_threads_.insert(std::make_pair(i, std::this_thread::get_id()));
+            epollers_.insert(std::make_pair(std::this_thread::get_id(), std::make_unique<epoller>()));
+
+            for (;;) {
+                std::vector<epoll_event> events;
+                int ready_fds = epollers_[std::this_thread::get_id()]->poll(events, 1024, std::chrono::milliseconds(-1));
+
+                if (ready_fds > 0) {
+                    for (const auto &event: events) {
+                        close_on_error(event);
+                        if (event.events & EPOLLOUT) {
+                            send_data(event.data.fd);
+                        }
+                    }
+                }
+            }
+        }));
+    }
 
     input_thread_.reset(new std::thread([this]() {
         std::cout << "[I] Input event loop " << std::this_thread::get_id();
@@ -45,10 +65,12 @@ void bjl::io_event_loop::run() {
 
                     if (event.events & EPOLLIN) {
                         if(!read_data(event.data.fd)) {
-                            input_epoller_.rearm_fd(event.data.fd, EPOLLOUT | EPOLLET);
+                            epollers_[output_threads_[current_output_epoller_]]->add_fd(event.data.fd, EPOLLOUT | EPOLLET);
+                            epollers_[input_thread_id]->remove_fd(event.data.fd);
+                            current_output_epoller_++;
+                            if ( current_output_epoller_ > workers_ - 1 )
+                                current_output_epoller_ = 0;
                         }
-                    } else if (event.events & EPOLLOUT) {
-                        send_data(event.data.fd);
                     }
                 }
             }
