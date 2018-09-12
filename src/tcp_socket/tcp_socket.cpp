@@ -87,7 +87,7 @@ void bjl::tcp_socket::run() {
         int ready_fds = epoller_.poll(events, 128, std::chrono::milliseconds(-1));
         if (ready_fds == -1) {
             if (errno == EINTR && volatile_listen_fd == -1) return;
-            throw std::runtime_error("polling interrupted");
+            throw std::runtime_error("Polling interrupted");
         } else if (ready_fds > 0) {
             for (const auto& event: events) {
                 if (event.events & EPOLLERR ||
@@ -133,13 +133,12 @@ void bjl::tcp_socket::start() {
 
 void bjl::tcp_socket::start_threaded() {
     acceptor_thread_.reset(new std::thread([this]() {
+        std::cout << "[I] Socket connection acceptor thread " << std::this_thread::get_id();
         this->bind();
         this->run();
     }));
 
-    io_thread_.reset(new std::thread([this]() {
-        this->run_io_epoller();
-    }));
+    run_io_epoller();
 }
 
 void bjl::tcp_socket::shutdown() {

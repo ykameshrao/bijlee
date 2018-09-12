@@ -9,62 +9,59 @@
 #include <sstream>
 
 bjl::io_event_loop::io_event_loop(int workers) : workers_ { workers } {
-//    for (int i=0; i < workers_; i++) {
-//        auto thread_ = new std::thread([this](int fd) {
-//            if (!read_data(fd)) {
-//                send_data(fd);
-//            }
-//        });
-//        worker_thread_.push_back(std::move(thread_));
-//    }
+    workers_ = std::max(workers, 2);
+    for (int i=0; i < workers_ - 1; i++) {
+        output_epollers_[i] = std::make_unique<epoller>();
+    }
 }
 
 bjl::io_event_loop::~io_event_loop() {
-//    for(const auto& t : worker_thread_) {
-//        t.join();
-//    }
+    input_thread_->join();
+    for (auto& t : worker_threads_) {
+        t.join();
+    }
 }
 
 void bjl::io_event_loop::add_connection(sockaddr&& addr, int connection_fd) {
     connections_.insert(std::make_pair(connection_fd, addr));
-    io_epoller_.add_fd(connection_fd, EPOLLIN | EPOLLHUP | EPOLLOUT);
+    epollers_[input_thread_id]->add_fd(connection_fd, EPOLLIN | EPOLLHUP | EPOLLOUT);
 }
 
 void bjl::io_event_loop::run() {
-    for (;;) {
-        std::vector<epoll_event> events;
-        int ready_fds = io_epoller_.poll(events, 1024, std::chrono::milliseconds(-1));
+    std::cout << "[I] Socket connection io event loop " << std::this_thread::get_id();
 
-        if (ready_fds > 0) {
-            for (const auto& event: events) {
-                close_on_error(event);
+    input_thread_.reset(new std::thread([this]() {
+        std::cout << "[I] Input event loop " << std::this_thread::get_id();
+        input_thread_id = std::this_thread::get_id();
+        epollers_.insert(std::make_pair(std::this_thread::get_id(), std::make_unique<epoller>()));
 
-                if (event.events & EPOLLIN) {
-                    if(!read_data(event.data.fd)) {
-                        io_epoller_.rearm_fd(event.data.fd, EPOLLOUT | EPOLLET);
+        for (;;) {
+            std::vector<epoll_event> events;
+            int ready_fds = epollers_[input_thread_id]->poll(events, 1024, std::chrono::milliseconds(-1));
+
+            if (ready_fds > 0) {
+                for (const auto& event: events) {
+                    close_on_error(event);
+
+                    if (event.events & EPOLLIN) {
+                        if(!read_data(event.data.fd)) {
+                            input_epoller_.rearm_fd(event.data.fd, EPOLLOUT | EPOLLET);
+                        }
+                    } else if (event.events & EPOLLOUT) {
+                        send_data(event.data.fd);
                     }
-                } else if (event.events & EPOLLOUT) {
-                    send_data(event.data.fd);
                 }
-
             }
-//            for (int i=0; i < events.size(); i += workers_) {
-//                for(int p = i; p < workers_; p++) {
-//                    close_on_error(events[p]);
-//
-//                    if (events[p].events & EPOLLIN) {
-//
-//
-//                    }
-//                }
-//            }
         }
-    }
+    }));
+
+
 }
 
 void bjl::io_event_loop::close_on_error(epoll_event e) {
     if (e.events & EPOLLERR || e.events & EPOLLHUP || ( !(e.events & EPOLLIN) && !(e.events & EPOLLOUT) ) ) {
-        std::cerr << "[E] epoll event error\n";
+        std::cerr << "[E] " << std::this_thread::get_id() << " epoll event error\n";
+        epollers_[std::this_thread::get_id()]->remove_fd(e.data.fd);
         ::close(e.data.fd);
     }
 }
@@ -77,8 +74,8 @@ bool bjl::io_event_loop::read_data(int fd) {
             return false;
         }
     } else if (count == 0) { // EOF - remote closed connection
-        std::cout << "[I] Close " << fd << "\n";
-        io_epoller_.remove_fd(fd);
+        std::cout << "[I] " << std::this_thread::get_id() << " Close " << fd << "\n";
+        epollers_[std::this_thread::get_id()]->remove_fd(fd);
         ::close(fd);
         return false;
     }
@@ -101,10 +98,10 @@ bool bjl::io_event_loop::send_data(int fd) {
 
     auto count = ::write(fd, wsss.str().c_str(), wsss.str().size());
     if (count == -1) {
-        std::cout << "[E] Write failed" << "\n";
+        std::cout << "[E] " << std::this_thread::get_id() << " Write failed" << "\n";
     } else if (count == wsss.str().size()) {
-        std::cout << "[I] Done writing...closing connection!" << "\n";
-        io_epoller_.remove_fd(fd);
+        std::cout << "[I] " << std::this_thread::get_id() << " Done writing...closing connection!" << "\n";
+        epollers_[std::this_thread::get_id()]->remove_fd(fd);
         ::close(fd);
     }
 }
