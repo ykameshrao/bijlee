@@ -12,6 +12,7 @@ C++ 11/14/17 only lightweight libraries for tcp, raft, etc
 ## Benchmarks
 * tcp_socket - some very very initial benchmarks of current code are as follows -
   * MBP 2017 model, Ubuntu 18.04, Core i7, 16 GB RAM
+  * 11.4 KB canned response for every request.
 
   * ./wrk -c40 -t4 -d10s -Htest:test http://0.0.0.0:1983/
   > Running 10s test @ http://0.0.0.0:1983/
