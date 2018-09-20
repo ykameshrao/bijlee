@@ -1,4 +1,4 @@
-# bijlee
+# bijlee [currently being implemented]
 C++ 11/14/17 only lightweight libraries for tcp, raft, etc
 
 ## Goal
