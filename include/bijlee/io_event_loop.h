@@ -36,6 +36,7 @@ namespace bjl {
         std::unordered_map<std::thread::id, std::unique_ptr<epoller>> epollers_;
 
         void check_for_errors(const epoll_event &event);
+        std::string&& response();
     };
 }
 

@@ -7,9 +7,10 @@
 #include <unistd.h>
 #include <memory>
 #include <sstream>
+#include <cstring>
 
 bjl::io_event_loop::io_event_loop(int workers) : workers_ { workers } {
-    workers_ = std::max(workers, 2);
+    workers_ = 1;//std::max(workers, 2);
     current_epoller_ = 0;
 }
 
@@ -21,7 +22,7 @@ bjl::io_event_loop::~io_event_loop() {
 
 void bjl::io_event_loop::add_connection(sockaddr&& addr, int connection_fd) {
     //connections_.insert(std::make_pair(connection_fd, addr));
-    epollers_[worker_threads_idx_[current_epoller_]]->add_fd(connection_fd, EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLOUT | EPOLLERR | EPOLLPRI);
+    epollers_[worker_threads_idx_[current_epoller_]]->add_fd(connection_fd, EPOLLIN | EPOLLET);
     current_epoller_++;
     if ( current_epoller_ >= workers_ )
         current_epoller_ = 0;
@@ -45,11 +46,12 @@ void bjl::io_event_loop::run() {
                         close_on_error(event);
 
                         if (event.events & EPOLLIN) {
-                            if(!read_data(event.data.fd)) {
+                            if(read_data(event.data.fd)) {
                                 std::cout << "[I] thread_name: " << std::this_thread::get_id() << "; fd: " << event.data.fd << " Done reading...now writing!" << std::endl;
-                                //epollers_[std::this_thread::get_id()]->rearm_fd(event.data.fd, EPOLLOUT | EPOLLET);
+                                epollers_[std::this_thread::get_id()]->rearm_fd(event.data.fd, EPOLLOUT | EPOLLET);
                             }
                         } else if (event.events & EPOLLOUT) {
+                            std::cout << "[I] thread_name: " << std::this_thread::get_id() << "; fd: " << event.data.fd << " Sending data ..";
                             send_data(event.data.fd);
                         } else {
                             check_for_errors(event);
@@ -71,25 +73,87 @@ void bjl::io_event_loop::close_on_error(epoll_event e) {
 }
 
 bool bjl::io_event_loop::read_data(int fd) {
-    char buf[512];
-    auto count = ::read(fd, buf, 512);
-    if (count == -1) {
-        if (errno == EAGAIN) { // read all data
-            return false;
+    char buf[8192];
+    memset(buf, 0, sizeof buf);
+
+    ssize_t totalBytes = 0;
+    for (;;) {
+        ssize_t bytes;
+        bytes = ::recv(fd, buf + totalBytes, 8192 - totalBytes, 0);
+        if (bytes == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (totalBytes > 0) {
+                    std::cout << fd << " says: " <<  buf;
+                    return true;
+                }
+            } else {
+                if (errno == ECONNRESET) {
+                    std::cout << "[I] thread_name: " << std::this_thread::get_id() << "; Disconnected " << fd << std::endl;
+                } else {
+                    throw std::runtime_error(strerror(errno));
+                }
+            }
+            break;
+        } else if (bytes == 0) {
+            std::cout << "[I] thread_name: " << std::this_thread::get_id() << "; Disconnected " << fd << std::endl;
+            epollers_[std::this_thread::get_id()]->remove_fd(fd);
+            ::close(fd);
+            break;
+        } else {
+            totalBytes += bytes;
+            if (totalBytes >= 8192) {
+                std::cerr << "Too long packet" << std::endl;
+                break;
+            }
         }
-    } else if (count == 0) { // EOF - remote closed connection
-        std::cout << "[I] thread_name: " << std::this_thread::get_id() << "; Close " << fd << std::endl;
-        epollers_[std::this_thread::get_id()]->remove_fd(fd);
-        ::close(fd);
-        //connections_.erase(fd);
-        return false;
     }
 
-    std::cout << fd << " says: " <<  buf;
-    return true;
+    return false;
 }
 
 bool bjl::io_event_loop::send_data(int fd) {
+    std::string res = response();
+    std::stringstream wsss;
+    wsss << "HTTP/1.1 200 OK\r\n"
+         << "Connection: keep-alive\r\n"
+         << "Content-Type: application/json\r\n"
+         << "Content-Length: " << res.length() << "\r\n"
+         << "\r\n"
+         << res
+         << "\r\n";
+
+    auto count = ::write(fd, wsss.str().c_str(), wsss.str().size());
+    if (count == -1) {
+        std::cout << "[E] thread_name: " << std::this_thread::get_id() << "; fd: " << fd << " Write failed" << std::endl;
+    } else if (count == wsss.str().size()) {
+        std::cout << "[I] thread_name: " << std::this_thread::get_id() << "; fd: " << fd << " Done writing...closing connection!" << std::endl;
+        epollers_[std::this_thread::get_id()]->remove_fd(fd);
+        ::close(fd);
+        //connections_.erase(fd);
+    }
+}
+
+void bjl::io_event_loop::check_for_errors(const epoll_event &event) {
+    if(event.events & EPOLLRDHUP) {
+        std::cout   << "[I] thread_name: " << std::this_thread::get_id()
+                    << "; fd: " << event.data.fd
+                    << "; event: EPOLLRDHUP";
+    } else if(event.events & EPOLLHUP) {
+        std::cout   << "[I] thread_name: " << std::this_thread::get_id()
+                    << "; fd: " << event.data.fd
+                    << "; event: EPOLLHUP";
+    } else if(event.events & EPOLLERR) {
+        std::cout   << "[I] thread_name: " << std::this_thread::get_id()
+                    << "; fd: " << event.data.fd
+                    << "; event: EPOLLERR";
+    } else if(event.events & EPOLLPRI) {
+        std::cout   << "[I] thread_name: " << std::this_thread::get_id()
+                    << "; fd: " << event.data.fd
+                    << "; event: EPOLLPRI";
+    }
+}
+
+std::string&& bjl::io_event_loop::response() {
     std::string response = "[\n"
                            "  {\n"
                            "    \"_id\": \"5b98b3826a5c59509d2d6b38\",\n"
@@ -548,45 +612,7 @@ bool bjl::io_event_loop::send_data(int fd) {
                            "    \"favoriteFruit\": \"banana\"\n"
                            "  }\n"
                            "]";
-
-    std::stringstream wsss;
-    wsss << "HTTP/1.1 200 OK\r\n"
-         << "Connection: keep-alive\r\n"
-         << "Content-Type: application/json\r\n"
-         << "Content-Length: " << response.length() << "\r\n"
-         << "\r\n"
-         << response
-         << "\r\n";
-
-    auto count = ::write(fd, wsss.str().c_str(), wsss.str().size());
-    if (count == -1) {
-        std::cout << "[E] thread_name: " << std::this_thread::get_id() << "; fd: " << fd << " Write failed" << std::endl;
-    } else if (count == wsss.str().size()) {
-        std::cout << "[I] thread_name: " << std::this_thread::get_id() << "; fd: " << fd << " Done writing...closing connection!" << std::endl;
-        epollers_[std::this_thread::get_id()]->remove_fd(fd);
-        ::close(fd);
-        //connections_.erase(fd);
-    }
-}
-
-void bjl::io_event_loop::check_for_errors(const epoll_event &event) {
-    if(event.events & EPOLLRDHUP) {
-        std::cout   << "[I] thread_name: " << std::this_thread::get_id()
-                    << "; fd: " << event.data.fd
-                    << "; event: EPOLLRDHUP";
-    } else if(event.events & EPOLLHUP) {
-        std::cout   << "[I] thread_name: " << std::this_thread::get_id()
-                    << "; fd: " << event.data.fd
-                    << "; event: EPOLLHUP";
-    } else if(event.events & EPOLLERR) {
-        std::cout   << "[I] thread_name: " << std::this_thread::get_id()
-                    << "; fd: " << event.data.fd
-                    << "; event: EPOLLERR";
-    } else if(event.events & EPOLLPRI) {
-        std::cout   << "[I] thread_name: " << std::this_thread::get_id()
-                    << "; fd: " << event.data.fd
-                    << "; event: EPOLLPRI";
-    }
+    return std::move(response);
 }
 
 
